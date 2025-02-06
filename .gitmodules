@@ -1,0 +1,3 @@
+[submodule "include/serial_bus_servo_controller_cpp"]
+	path = include/serial_bus_servo_controller_cpp
+	url = git@github.com:Laroto/serial_bus_servo_controller_cpp.git
