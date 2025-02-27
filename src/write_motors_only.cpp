@@ -25,9 +25,9 @@ public:
             "/actuators", 10,
             std::bind(&MotorController::jointStatesCallback, this, std::placeholders::_1));
 
-        // Timer to alternate read/write
+        // Timer to write with the correct rate
         timer_ = this->create_wall_timer(
-            std::chrono::milliseconds(delay_ms /2),
+            std::chrono::milliseconds(delay_ms /2), // half because we do not need a reply
             std::bind(&MotorController::timedWrite, this));
 
         RCLCPP_INFO(this->get_logger(), "Motor Controller Node started");
