@@ -86,7 +86,7 @@ private:
 
             for (size_t i = 0; i < pos_values.size(); ++i) {
                 uint16_t pos = pos_values[i];
-                float degrees = ((static_cast<float>(pos) - 750.0f) / 750.0f) * 120.0f;
+                float degrees = ((static_cast<float>(pos) - 500.0f) / 500.0f) * 120.0f;
                 float radians = degrees * (M_PI / 180.0f);
                 position_radians.push_back(radians);
 
