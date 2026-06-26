@@ -1,6 +1,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/joint_state.hpp"
 #include "actuator_msgs/msg/actuators.hpp"
+#include "std_srvs/srv/trigger.hpp"
 #include "sbs_controller.hpp"
 
 class MotorController : public rclcpp::Node {
@@ -25,6 +26,13 @@ public:
             "/actuators", 10,
             std::bind(&MotorController::jointStatesCallback, this, std::placeholders::_1));
 
+        disable_service_ = this->create_service<std_srvs::srv::Trigger>(
+            "/motors/disable",
+            std::bind(&MotorController::disableMotorsCallback, this, std::placeholders::_1, std::placeholders::_2));
+        enable_service_ = this->create_service<std_srvs::srv::Trigger>(
+            "/motors/enable",
+            std::bind(&MotorController::enableMotorsCallback, this, std::placeholders::_1, std::placeholders::_2));
+
         // Timer to alternate read/write
         timer_ = this->create_wall_timer(
             std::chrono::milliseconds(delay_ms /2),
@@ -38,15 +46,48 @@ public:
 
 private:
     void timedWrite() {
+        if (!motors_enabled_) {
+            return;
+        }
+
         if (this->latest_joint_state_) {
             sendMotorCommands(std::make_shared<actuator_msgs::msg::Actuators>(this->latest_joint_state_.value()));
         } else {
-            RCLCPP_WARN(this->get_logger(), "No message received yet on /actuatos");
+            RCLCPP_WARN(this->get_logger(), "No message received yet on /actuators");
         }
     }
 
     void jointStatesCallback(const actuator_msgs::msg::Actuators::SharedPtr msg) {
         this->latest_joint_state_ = *msg; // Store the latest message
+    }
+
+    void disableMotorsCallback(
+        const std::shared_ptr<std_srvs::srv::Trigger::Request> /*request*/,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+        motors_enabled_ = false;
+        try {
+            sbs_controller_->cmdMultiServoUnload(servo_ids_);
+            response->success = true;
+            response->message = "Motors disabled.";
+            RCLCPP_WARN(this->get_logger(), "Motors disabled; actuator writes are paused.");
+        } catch (const std::exception & exc) {
+            response->success = false;
+            response->message = std::string("Failed to disable motors: ") + exc.what();
+            RCLCPP_ERROR(this->get_logger(), "%s", response->message.c_str());
+        }
+    }
+
+    void enableMotorsCallback(
+        const std::shared_ptr<std_srvs::srv::Trigger::Request> /*request*/,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response) {
+        motors_enabled_ = true;
+        if (this->latest_joint_state_) {
+            sendMotorCommands(std::make_shared<actuator_msgs::msg::Actuators>(this->latest_joint_state_.value()));
+        }
+
+        response->success = true;
+        response->message = "Motors enabled.";
+        RCLCPP_INFO(this->get_logger(), "Motors enabled; actuator writes are active.");
     }
 
     void sendMotorCommands(const actuator_msgs::msg::Actuators::SharedPtr latest_joint_state) {
@@ -63,16 +104,23 @@ private:
             positions.push_back(static_cast<uint16_t>(scaled_position));
         }
 
-        sbs_controller_->cmdServoMove(servo_ids_, positions, 1);
+        try {
+            sbs_controller_->cmdServoMove(servo_ids_, positions, 1);
+        } catch (const std::exception & exc) {
+            RCLCPP_ERROR(this->get_logger(), "Failed to send motor commands: %s", exc.what());
+        }
     }
 
     std::vector<unsigned char> servo_ids_ = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18};
 
     rclcpp::Subscription<actuator_msgs::msg::Actuators>::SharedPtr joint_states_sub_;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr disable_service_;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr enable_service_;
     rclcpp::TimerBase::SharedPtr timer_;
     std::unique_ptr<SBSController> sbs_controller_;
 
     std::optional<actuator_msgs::msg::Actuators> latest_joint_state_;
+    bool motors_enabled_ = true;
 };
 
 int main(int argc, char **argv) {

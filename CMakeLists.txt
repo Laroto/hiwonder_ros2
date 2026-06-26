@@ -6,6 +6,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(actuator_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
 # Include directories
 include_directories(
@@ -23,12 +24,14 @@ ament_target_dependencies(hiwonder_ros_node
   rclcpp
   sensor_msgs
   actuator_msgs
+  std_srvs
 )
 
 ament_target_dependencies(write_only
   rclcpp
   sensor_msgs
   actuator_msgs
+  std_srvs
 )
 
 install(TARGETS
